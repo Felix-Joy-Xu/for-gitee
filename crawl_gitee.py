@@ -204,10 +204,17 @@ def get_active_path(repo_dir: Path, table: str) -> Path:
 def write_jsonl(repo_dir: Path, table: str, records: list):
     if not records:
         return
+    i = 0
     file_path = get_active_path(repo_dir, table)
-    with open(file_path, "a", encoding="utf-8") as f:
-        for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    while i < len(records):
+        start = i
+        with open(file_path, "a", encoding="utf-8") as f:
+            # 写入中滚动检查大小（单次调用可能写入数百 MB，必须在写的过程中分片）
+            while i < len(records) and (f.tell() < MAX_FILE_SIZE or i == start):
+                f.write(json.dumps(records[i], ensure_ascii=False) + "\n")
+                i += 1
+        if i < len(records):
+            file_path = get_active_path(repo_dir, table)
 
 
 def fetch_paginated(session: requests.Session, path: str, params: dict = None,
