@@ -228,6 +228,7 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
     返回的 all_items 仍保留（兼容原调用方）。
     """
     all_items = []
+    ok = False  # 是否至少成功请求过一次（防止"幽灵完成"：全失败被标完成）
     p = dict(params) if params else {}
     p["per_page"] = MAX_PER_PAGE
     page = start_page
@@ -235,7 +236,7 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
 
     while True:
         if time_up():
-            return all_items
+            return all_items, ok
         p["page"] = page
         if since and since_key:
             p[since_key] = since
@@ -245,6 +246,7 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
             print(f"  [paginate] {path} HTTP {status}, stop at page {page}")
             break
 
+        ok = True
         if not isinstance(data, list):
             print(f"  [paginate] {path} returned non-list, stop")
             break
@@ -265,7 +267,7 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
         page += 1
         time.sleep(REQUEST_DELAY)
 
-    return all_items
+    return all_items, ok
 
 
 # ============================================================================
@@ -297,6 +299,7 @@ def crawl_repos(session: requests.Session, repos: list, state: dict):
 def crawl_issues(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
+    failed = list(state.get("failed", []))
     for owner, repo in repos:
         if time_up():
             return
@@ -322,12 +325,23 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
                 save_state("issues", state)
 
         start = progress.get(full, 0) + 1
-        fetch_paginated(session, f"/repos/{owner}/{repo}/issues",
-                        {"state": "all"}, since_key="since", since=since,
-                        start_page=start, on_page=on_page)
+        items, ok = fetch_paginated(session, f"/repos/{owner}/{repo}/issues",
+                                    {"state": "all"}, since_key="since", since=since,
+                                    start_page=start, on_page=on_page)
+
+        if not ok and not items:
+            # 请求全部失败：不得标记完成，记录失败供下轮重试
+            if full not in failed:
+                failed.append(full)
+            state["failed"] = failed
+            save_state("issues", state)
+            print(f"  [issues] {full}: 请求失败，跳过本轮（下轮重试）")
+            continue
 
         completed.add(full)
+        failed = [f for f in failed if f != full]
         progress.pop(full, None)
+        state["failed"] = failed
         state["progress"] = progress
         state["completed"] = sorted(completed)
         save_state("issues", state)
@@ -337,6 +351,7 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
 def crawl_issue_comments(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
+    failed = list(state.get("failed", []))
     for owner, repo in repos:
         if time_up():
             return
@@ -365,12 +380,22 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
                 save_state("issue_comments", state)
 
         start = progress.get(full, 0) + 1
-        fetch_paginated(session, f"/repos/{owner}/{repo}/issues/comments",
-                        {}, since_key="since", since=since,
-                        start_page=start, on_page=on_page)
+        items, ok = fetch_paginated(session, f"/repos/{owner}/{repo}/issues/comments",
+                                    {}, since_key="since", since=since,
+                                    start_page=start, on_page=on_page)
+
+        if not ok and not items:
+            if full not in failed:
+                failed.append(full)
+            state["failed"] = failed
+            save_state("issue_comments", state)
+            print(f"  [issue_comments] {full}: 请求失败，跳过本轮（下轮重试）")
+            continue
 
         completed.add(full)
+        failed = [f for f in failed if f != full]
         progress.pop(full, None)
+        state["failed"] = failed
         state["progress"] = progress
         state["completed"] = sorted(completed)
         save_state("issue_comments", state)
@@ -380,6 +405,7 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
 def crawl_pull_requests(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
+    failed = list(state.get("failed", []))
     for owner, repo in repos:
         if time_up():
             return
@@ -403,12 +429,22 @@ def crawl_pull_requests(session: requests.Session, repos: list, state: dict, sin
 
         # Gitee 实测忽略 sort/direction（始终返回最新在前），不传以免个别端点 500
         start = progress.get(full, 0) + 1
-        fetch_paginated(session, f"/repos/{owner}/{repo}/pulls",
-                        {"state": "all"}, since_key="since", since=since,
-                        start_page=start, on_page=on_page)
+        items, ok = fetch_paginated(session, f"/repos/{owner}/{repo}/pulls",
+                                    {"state": "all"}, since_key="since", since=since,
+                                    start_page=start, on_page=on_page)
+
+        if not ok and not items:
+            if full not in failed:
+                failed.append(full)
+            state["failed"] = failed
+            save_state("pull_requests", state)
+            print(f"  [pull_requests] {full}: 请求失败，跳过本轮（下轮重试）")
+            continue
 
         completed.add(full)
+        failed = [f for f in failed if f != full]
         progress.pop(full, None)
+        state["failed"] = failed
         state["progress"] = progress
         state["completed"] = sorted(completed)
         save_state("pull_requests", state)
@@ -455,7 +491,7 @@ def crawl_pr_comments(session: requests.Session, repos: list, state: dict):
                 save_state("pr_comments", state)
                 print(f"  [pr_comments] {full}: 时间到，已保存 {len(done)}/{len(pr_numbers)} 个 PR 断点")
                 return
-            comments = fetch_paginated(session, f"/repos/{owner}/{repo}/pulls/{num}/comments")
+            comments, _ = fetch_paginated(session, f"/repos/{owner}/{repo}/pulls/{num}/comments")
             if comments:
                 for c in comments:
                     c["repo"] = full
