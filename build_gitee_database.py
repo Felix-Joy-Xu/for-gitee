@@ -373,13 +373,20 @@ def main():
             total_repos += 1
             print(f"[import] {repo}")
 
-            insert_repos(conn, repo, load_jsonl(repo_dir / "repos.jsonl"))
-            insert_issues(conn, repo, load_jsonl(repo_dir / "issues.jsonl"))
-            insert_issue_comments(conn, repo, load_jsonl(repo_dir / "issue_comments.jsonl"))
-            insert_pull_requests(conn, repo, load_jsonl(repo_dir / "pull_requests.jsonl"))
-            insert_pr_comments(conn, repo, load_jsonl(repo_dir / "pr_comments.jsonl"))
-            insert_pr_reviews(conn, repo, load_jsonl(repo_dir / "pr_reviews.jsonl"))
-            insert_pr_timeline(conn, repo, load_jsonl(repo_dir / "pr_timeline.jsonl"))
+            # 支持分片文件：{table}.jsonl / {table}_part{N}.jsonl
+            def load_table(table: str) -> list:
+                records = []
+                for f in sorted(repo_dir.glob(f"{table}*.jsonl")):
+                    records.extend(load_jsonl(f))
+                return records
+
+            insert_repos(conn, repo, load_table("repos"))
+            insert_issues(conn, repo, load_table("issues"))
+            insert_issue_comments(conn, repo, load_table("issue_comments"))
+            insert_pull_requests(conn, repo, load_table("pull_requests"))
+            insert_pr_comments(conn, repo, load_table("pr_comments"))
+            insert_pr_reviews(conn, repo, load_table("pr_reviews"))
+            insert_pr_timeline(conn, repo, load_table("pr_timeline"))
 
     # 更新 repos 表的 pr_count
     conn.execute("""

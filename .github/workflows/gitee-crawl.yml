@@ -43,7 +43,11 @@ jobs:
               git add "02-原始数据" modelscope_output
               git commit -m "gitee 自动备份最新爬取进度 [skip ci]" 2>/dev/null || true
               git pull --rebase 2>/dev/null || true
-              git push 2>/dev/null || echo "当前无新数据可备份"
+              for i in 1 2 3 4 5; do
+                git push && break
+                echo "push 失败(第 ${i} 次)，15 秒后重试"
+                sleep 15
+              done
             done
           ) &
           AUTO_COMMIT_PID=$!
@@ -66,4 +70,8 @@ jobs:
           git add "02-原始数据" modelscope_output PROGRESS.md
           git commit -m "保存 gitee 爬取数据与断点状态 [skip ci]" || echo "没有检测到任何更新"
           git pull --rebase 2>/dev/null || true
-          git push || echo "推送失败或无更新"
+          for i in 1 2 3 4 5; do
+            git push && break
+            echo "push 失败(第 ${i} 次)，15 秒后重试"
+            sleep 15
+          done

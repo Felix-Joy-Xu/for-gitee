@@ -25,15 +25,14 @@ if RAW.is_dir():
     for repo_dir in sorted(RAW.iterdir()):
         if not repo_dir.is_dir():
             continue
-        for table in TABLES:
-            f = repo_dir / f"{table}.jsonl"
-            if f.exists():
-                with open(f, encoding="utf-8", errors="ignore") as fh:
-                    total[table] += sum(1 for _ in fh)
         counts = []
         for table in TABLES:
-            f = repo_dir / f"{table}.jsonl"
-            counts.append(str(sum(1 for _ in open(f, encoding="utf-8", errors="ignore"))) if f.exists() else "0")
+            n = 0
+            for f in repo_dir.glob(f"{table}*.jsonl"):
+                with open(f, encoding="utf-8", errors="ignore") as fh:
+                    n += sum(1 for _ in fh)
+            total[table] += n
+            counts.append(str(n))
         lines.append(f"| {repo_dir.name} | " + " | ".join(counts) + " |")
 
 lines.append("")

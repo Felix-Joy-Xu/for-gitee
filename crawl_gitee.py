@@ -170,10 +170,29 @@ def gitee_get(session: requests.Session, path: str, params: dict = None) -> tupl
     return None, -1
 
 
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB 触发分片，确保单文件远低于 GitHub 100MB 上限
+
+
+def get_active_path(repo_dir: Path, table: str) -> Path:
+    """返回当前可写的 jsonl 路径；超过 MAX_FILE_SIZE 自动切换 {table}_part{N}.jsonl。"""
+    base = repo_dir / f"{table}.jsonl"
+    if not base.exists() or base.stat().st_size < MAX_FILE_SIZE:
+        return base
+    part = 1
+    while True:
+        cand = repo_dir / f"{table}_part{part}.jsonl"
+        if not cand.exists():
+            return cand
+        if cand.stat().st_size >= MAX_FILE_SIZE:
+            part += 1
+            continue
+        return cand
+
+
 def write_jsonl(repo_dir: Path, table: str, records: list):
     if not records:
         return
-    file_path = repo_dir / f"{table}.jsonl"
+    file_path = get_active_path(repo_dir, table)
     with open(file_path, "a", encoding="utf-8") as f:
         for rec in records:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
