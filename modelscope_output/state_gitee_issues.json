@@ -1,6 +1,20 @@
 {
   "completed": [
-    "mindspore/mindspore"
+    "Tencent/APIJSON",
+    "Tencent/vConsole",
+    "Tencent/weui",
+    "alibaba/canal",
+    "apolloconfig/apollo",
+    "baomidou/mybatis-plus",
+    "elunez/eladmin",
+    "lenve/vhr",
+    "macrozheng/mall",
+    "mindspore/mindspore",
+    "mindspore/mindspore-lite",
+    "newbee-ltd/newbee-mall",
+    "opengoofy/hippo4j",
+    "pingcap/tidb",
+    "sofastack/sofa-boot"
   ],
   "fixed_ghost_completed": [
     "Baidu/uid-generator",
@@ -34,6 +48,19 @@
     "sofastack/sofa-boot"
   ],
   "restored_completed": [
-    "mindspore/mindspore"
+    "Tencent/APIJSON",
+    "Tencent/vConsole",
+    "Tencent/weui",
+    "alibaba/canal",
+    "apolloconfig/apollo",
+    "baomidou/mybatis-plus",
+    "elunez/eladmin",
+    "lenve/vhr",
+    "macrozheng/mall",
+    "mindspore/mindspore-lite",
+    "newbee-ltd/newbee-mall",
+    "opengoofy/hippo4j",
+    "pingcap/tidb",
+    "sofastack/sofa-boot"
   ]
 }
