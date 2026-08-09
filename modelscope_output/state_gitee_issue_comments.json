@@ -1,5 +1,16 @@
 {
-  "completed": [],
+  "completed": [
+    "Tencent/APIJSON",
+    "Tencent/vConsole",
+    "apolloconfig/apollo",
+    "baomidou/mybatis-plus",
+    "elunez/eladmin",
+    "lenve/vhr",
+    "macrozheng/mall",
+    "mindspore/mindspore-lite",
+    "newbee-ltd/newbee-mall",
+    "opengoofy/hippo4j"
+  ],
   "fixed_ghost_completed": [
     "Baidu/uid-generator",
     "InternLM/InternLM",
@@ -30,5 +41,17 @@
     "opengoofy/hippo4j",
     "pingcap/tidb",
     "sofastack/sofa-boot"
+  ],
+  "restored_completed": [
+    "Tencent/APIJSON",
+    "Tencent/vConsole",
+    "apolloconfig/apollo",
+    "baomidou/mybatis-plus",
+    "elunez/eladmin",
+    "lenve/vhr",
+    "macrozheng/mall",
+    "mindspore/mindspore-lite",
+    "newbee-ltd/newbee-mall",
+    "opengoofy/hippo4j"
   ]
 }
