@@ -40,7 +40,7 @@ jobs:
             while true; do
               sleep 1500
               echo "=== 启动 25分钟 自动进度备份 ==="
-              git add "02-原始数据" modelscope_output gitee_selected_repos.json
+              git add "02-原始数据" modelscope_output
               git commit -m "gitee 自动备份最新爬取进度 [skip ci]" 2>/dev/null || true
               git pull --rebase 2>/dev/null || true
               git push 2>/dev/null || echo "当前无新数据可备份"
