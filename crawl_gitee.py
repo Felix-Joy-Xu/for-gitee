@@ -220,12 +220,17 @@ def write_jsonl(repo_dir: Path, table: str, records: list):
 
 
 def fetch_paginated(session: requests.Session, path: str, params: dict = None,
-                    since_key: str = "since", since: str = None) -> list:
-    """分页拉取列表接口，返回合并后的列表。"""
+                    since_key: str = "since", since: str = None,
+                    start_page: int = 1, on_page=None) -> list:
+    """分页拉取列表接口，返回合并后的列表。
+
+    on_page(page_items, page)：每页回调（用于增量落盘 + 页级断点），
+    返回的 all_items 仍保留（兼容原调用方）。
+    """
     all_items = []
     p = dict(params) if params else {}
     p["per_page"] = MAX_PER_PAGE
-    page = 1
+    page = start_page
     empty_count = 0
 
     while True:
@@ -249,6 +254,8 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
         else:
             empty_count = 0
             all_items.extend(data)
+            if on_page:
+                on_page(data, page)
 
         if len(data) < MAX_PER_PAGE:
             break
@@ -287,6 +294,7 @@ def crawl_repos(session: requests.Session, repos: list, state: dict):
 
 def crawl_issues(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
+    progress = dict(state.get("progress", {}))
     for owner, repo in repos:
         if time_up():
             return
@@ -296,22 +304,37 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
-        items = fetch_paginated(session, f"/repos/{owner}/{repo}/issues",
-                                {"state": "all"}, since_key="since", since=since)
-        # 过滤 pull_request（Gitee issue 列表有时会混 PR）
-        pure_issues = [it for it in items if "pull_request" not in it]
-        for it in pure_issues:
-            it["repo"] = full
-        write_jsonl(repo_dir, "issues", pure_issues)
+        fetched = {"n": 0}
+
+        def on_page(page_items, page):
+            # 过滤 pull_request（Gitee issue 列表有时会混 PR）
+            for it in page_items:
+                if "pull_request" in it:
+                    continue
+                it["repo"] = full
+                write_jsonl(repo_dir, "issues", [it])
+                fetched["n"] += 1
+            progress[full] = page
+            if page % 10 == 0:
+                state["progress"] = progress
+                save_state("issues", state)
+
+        start = progress.get(full, 0) + 1
+        fetch_paginated(session, f"/repos/{owner}/{repo}/issues",
+                        {"state": "all"}, since_key="since", since=since,
+                        start_page=start, on_page=on_page)
 
         completed.add(full)
+        progress.pop(full, None)
+        state["progress"] = progress
         state["completed"] = sorted(completed)
         save_state("issues", state)
-        print(f"  [issues] {full}: {len(pure_issues)}")
+        print(f"  [issues] {full}: {fetched['n']}")
 
 
 def crawl_issue_comments(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
+    progress = dict(state.get("progress", {}))
     for owner, repo in repos:
         if time_up():
             return
@@ -321,28 +344,40 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
-        items = fetch_paginated(session, f"/repos/{owner}/{repo}/issues/comments",
-                                {}, since_key="since", since=since)
-        # 只保留 issue 评论（Gitee 该端点同时返回 PR 评论，PR 评论归 pr_comments 表）
-        # Gitee issue 编号为字符串（如 I1CATK），无 issue_url 字段，需从 target.issue.number 提取
-        pure = []
-        for it in items:
-            target = it.get("target") or {}
-            if not target.get("issue"):
-                continue
-            it["repo"] = full
-            it["issue_number"] = target["issue"].get("number", "")
-            pure.append(it)
-        write_jsonl(repo_dir, "issue_comments", pure)
+        fetched = {"n": 0}
+
+        def on_page(page_items, page):
+            # 只保留 issue 评论（Gitee 该端点同时返回 PR 评论，PR 评论归 pr_comments 表）
+            # Gitee issue 编号为字符串（如 I1CATK），无 issue_url 字段，需从 target.issue.number 提取
+            for it in page_items:
+                target = it.get("target") or {}
+                if not target.get("issue"):
+                    continue
+                it["repo"] = full
+                it["issue_number"] = target["issue"].get("number", "")
+                write_jsonl(repo_dir, "issue_comments", [it])
+                fetched["n"] += 1
+            progress[full] = page
+            if page % 10 == 0:
+                state["progress"] = progress
+                save_state("issue_comments", state)
+
+        start = progress.get(full, 0) + 1
+        fetch_paginated(session, f"/repos/{owner}/{repo}/issues/comments",
+                        {}, since_key="since", since=since,
+                        start_page=start, on_page=on_page)
 
         completed.add(full)
+        progress.pop(full, None)
+        state["progress"] = progress
         state["completed"] = sorted(completed)
         save_state("issue_comments", state)
-        print(f"  [issue_comments] {full}: {len(pure)}")
+        print(f"  [issue_comments] {full}: {fetched['n']}")
 
 
 def crawl_pull_requests(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
+    progress = dict(state.get("progress", {}))
     for owner, repo in repos:
         if time_up():
             return
@@ -352,17 +387,30 @@ def crawl_pull_requests(session: requests.Session, repos: list, state: dict, sin
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
+        fetched = {"n": 0}
+
+        def on_page(page_items, page):
+            for it in page_items:
+                it["repo"] = full
+                write_jsonl(repo_dir, "pull_requests", [it])
+                fetched["n"] += 1
+            progress[full] = page
+            if page % 10 == 0:
+                state["progress"] = progress
+                save_state("pull_requests", state)
+
         # Gitee 实测忽略 sort/direction（始终返回最新在前），不传以免个别端点 500
-        items = fetch_paginated(session, f"/repos/{owner}/{repo}/pulls",
-                                {"state": "all"}, since_key="since", since=since)
-        for it in items:
-            it["repo"] = full
-        write_jsonl(repo_dir, "pull_requests", items)
+        start = progress.get(full, 0) + 1
+        fetch_paginated(session, f"/repos/{owner}/{repo}/pulls",
+                        {"state": "all"}, since_key="since", since=since,
+                        start_page=start, on_page=on_page)
 
         completed.add(full)
+        progress.pop(full, None)
+        state["progress"] = progress
         state["completed"] = sorted(completed)
         save_state("pull_requests", state)
-        print(f"  [pull_requests] {full}: {len(items)}")
+        print(f"  [pull_requests] {full}: {fetched['n']}")
 
 
 PR_COMMENT_MAX_PR = 3000  # 超过该 PR 数的仓库跳过 pr_comments（逐 PR 抓取在云端单次运行无法完成）
