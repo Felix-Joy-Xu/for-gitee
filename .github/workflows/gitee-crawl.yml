@@ -5,6 +5,10 @@ on:
   schedule: # 每日定时增量续爬（UTC 21:00，即北京时间 05:00）
     - cron: "0 21 * * *"
 
+concurrency: # 防止定时任务与手动运行重叠（避免双守护进程抢推）
+  group: gitee-crawl
+  cancel-in-progress: false
+
 jobs:
   crawl:
     runs-on: ubuntu-latest

@@ -61,25 +61,32 @@ TABLES = ["repos", "issues", "issue_comments", "pull_requests", "pr_comments", "
 
 
 class TokenRotator:
-    """Gitee token 轮换器，支持多 token 避免限流。"""
+    """Gitee token 轮换器：多 token 轮换 + 限流冷却（到期自动恢复，避免永久封禁导致全部 token 报废）。"""
+    COOLDOWN = 120  # 秒
+
     def __init__(self):
         self.tokens = list(dict.fromkeys(GITEE_TOKENS or ([GITEE_TOKEN] if GITEE_TOKEN else [])))
         self.idx = 0
-        self.failed = set()
+        self.cooldown_until = {t: 0.0 for t in self.tokens}
+
+    def _available(self):
+        now = time.time()
+        return [t for t in self.tokens if now >= self.cooldown_until[t]]
 
     def current(self) -> str | None:
-        available = [t for t in self.tokens if t not in self.failed]
+        available = self._available()
         if not available:
             return None
         return available[self.idx % len(available)]
 
     def next(self):
-        available = [t for t in self.tokens if t not in self.failed]
+        available = self._available()
         if available:
             self.idx = (self.idx + 1) % len(available)
 
-    def mark_failed(self, token: str):
-        self.failed.add(token)
+    def mark_cooldown(self, token: str, seconds: int = COOLDOWN):
+        # 加少量抖动，避免多个 token 冷却同时到期造成请求突发
+        self.cooldown_until[token] = time.time() + seconds + (token[0] and (len(token) % 30))
 
 
 TOKEN_ROTATOR = TokenRotator()
@@ -148,16 +155,9 @@ def gitee_get(session: requests.Session, path: str, params: dict = None) -> tupl
                     return r.text, 200
             if r.status_code == 404:
                 return None, 404
-            if r.status_code == 403:
-                # 可能是限流或私有/无权限
-                if "rate limit" in r.text.lower() or "limit" in r.text.lower() or "请求次数" in r.text:
-                    TOKEN_ROTATOR.mark_failed(token)
-                    TOKEN_ROTATOR.next()
-                    time.sleep(1)
-                    continue
-                return None, 403
-            if r.status_code == 429:
-                TOKEN_ROTATOR.mark_failed(token)
+            if r.status_code in (403, 429):
+                # 限流或权限不足：冷却当前 token 并轮换（到期自动恢复，不永久封禁）
+                TOKEN_ROTATOR.mark_cooldown(token)
                 TOKEN_ROTATOR.next()
                 time.sleep(1)
                 continue
@@ -171,6 +171,18 @@ def gitee_get(session: requests.Session, path: str, params: dict = None) -> tupl
 
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB 触发分片，确保单文件远低于 GitHub 100MB 上限
+
+# 云端运行时间控制（GitHub Actions 上限 6 小时，工作流 timeout 355 分钟；
+# 这里 340 分钟优雅退出，先保存断点再结束）
+START_RUN_TIME = time.time()
+MAX_RUN_TIME = 340 * 60
+
+
+def time_up() -> bool:
+    if time.time() - START_RUN_TIME > MAX_RUN_TIME:
+        print("[time] 达到单次运行时间上限，安全退出以保存进度")
+        return True
+    return False
 
 
 def get_active_path(repo_dir: Path, table: str) -> Path:
@@ -244,6 +256,8 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
 def crawl_repos(session: requests.Session, repos: list, state: dict):
     completed = set(state.get("completed", []))
     for owner, repo in repos:
+        if time_up():
+            return
         full = f"{owner}/{repo}"
         if full in completed:
             continue
@@ -265,6 +279,8 @@ def crawl_repos(session: requests.Session, repos: list, state: dict):
 def crawl_issues(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     for owner, repo in repos:
+        if time_up():
+            return
         full = f"{owner}/{repo}"
         if full in completed:
             continue
@@ -288,6 +304,8 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
 def crawl_issue_comments(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     for owner, repo in repos:
+        if time_up():
+            return
         full = f"{owner}/{repo}"
         if full in completed:
             continue
@@ -311,21 +329,23 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
         completed.add(full)
         state["completed"] = sorted(completed)
         save_state("issue_comments", state)
-        print(f"  [issue_comments] {full}: {len(items)}")
+        print(f"  [issue_comments] {full}: {len(pure)}")
 
 
 def crawl_pull_requests(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     for owner, repo in repos:
+        if time_up():
+            return
         full = f"{owner}/{repo}"
         if full in completed:
             continue
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
+        # Gitee 实测忽略 sort/direction（始终返回最新在前），不传以免个别端点 500
         items = fetch_paginated(session, f"/repos/{owner}/{repo}/pulls",
-                                {"state": "all", "sort": "created", "direction": "asc"},
-                                since_key="since", since=since)
+                                {"state": "all"}, since_key="since", since=since)
         for it in items:
             it["repo"] = full
         write_jsonl(repo_dir, "pull_requests", items)
@@ -336,39 +356,66 @@ def crawl_pull_requests(session: requests.Session, repos: list, state: dict, sin
         print(f"  [pull_requests] {full}: {len(items)}")
 
 
+PR_COMMENT_MAX_PR = 3000  # 超过该 PR 数的仓库跳过 pr_comments（逐 PR 抓取在云端单次运行无法完成）
+
+
 def crawl_pr_comments(session: requests.Session, repos: list, state: dict):
-    """遍历每个 PR，抓取 PR 评论。"""
+    """遍历每个 PR 抓取 PR 评论：按 PR 增量写入 + 逐 PR 断点续传 + 大仓跳过。"""
     completed = set(state.get("completed", []))
+    skipped_repos = dict(state.get("skipped_repos", {}))
+    pr_done = dict(state.get("pr_done", {}))
     for owner, repo in repos:
         full = f"{owner}/{repo}"
-        if full in completed:
+        if full in completed or full in skipped_repos:
             continue
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
-        # 读取已抓取的 PR 列表
-        pr_file = repo_dir / "pull_requests.jsonl"
+        # 读取已抓取的 PR 列表（含分片）
         pr_numbers = []
-        if pr_file.exists():
-            with open(pr_file, "r", encoding="utf-8") as f:
+        for pf in sorted(repo_dir.glob("pull_requests*.jsonl")):
+            with open(pf, "r", encoding="utf-8") as f:
                 for line in f:
                     pr = json.loads(line)
                     pr_numbers.append(pr.get("number"))
 
-        all_comments = []
+        if len(pr_numbers) > PR_COMMENT_MAX_PR:
+            skipped_repos[full] = f"PR 数 {len(pr_numbers)} 超过上限 {PR_COMMENT_MAX_PR}"
+            state["skipped_repos"] = skipped_repos
+            save_state("pr_comments", state)
+            print(f"  [pr_comments] {full}: 跳过（{skipped_repos[full]}）")
+            continue
+
+        done = set(pr_done.get(full, []))
+        total_fetched = 0
         for num in pr_numbers:
+            if num in done:
+                continue
+            if time_up():
+                state["pr_done"] = pr_done
+                save_state("pr_comments", state)
+                print(f"  [pr_comments] {full}: 时间到，已保存 {len(done)}/{len(pr_numbers)} 个 PR 断点")
+                return
             comments = fetch_paginated(session, f"/repos/{owner}/{repo}/pulls/{num}/comments")
-            for c in comments:
-                c["repo"] = full
-                c["pr_number"] = num
-            all_comments.extend(comments)
+            if comments:
+                for c in comments:
+                    c["repo"] = full
+                    c["pr_number"] = num
+                write_jsonl(repo_dir, "pr_comments", comments)
+                total_fetched += len(comments)
+            done.add(num)
+            if len(done) % 50 == 0:
+                pr_done[full] = sorted(int(x) for x in done)
+                state["pr_done"] = pr_done
+                save_state("pr_comments", state)
             time.sleep(REQUEST_DELAY)
 
-        write_jsonl(repo_dir, "pr_comments", all_comments)
         completed.add(full)
         state["completed"] = sorted(completed)
+        pr_done.pop(full, None)
+        state["pr_done"] = pr_done
         save_state("pr_comments", state)
-        print(f"  [pr_comments] {full}: {len(all_comments)}")
+        print(f"  [pr_comments] {full}: {total_fetched} 条评论（{len(pr_numbers)} 个 PR）")
 
 
 def crawl_pr_reviews(session: requests.Session, repos: list, state: dict):
@@ -382,16 +429,17 @@ def crawl_pr_reviews(session: requests.Session, repos: list, state: dict):
         return
     completed = set(state.get("completed", []))
     for owner, repo in repos:
+        if time_up():
+            return
         full = f"{owner}/{repo}"
         if full in completed:
             continue
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
-        pr_file = repo_dir / "pull_requests.jsonl"
         pr_numbers = []
-        if pr_file.exists():
-            with open(pr_file, "r", encoding="utf-8") as f:
+        for pf in sorted(repo_dir.glob("pull_requests*.jsonl")):
+            with open(pf, "r", encoding="utf-8") as f:
                 for line in f:
                     pr = json.loads(line)
                     pr_numbers.append(pr.get("number"))
@@ -435,16 +483,17 @@ def crawl_pr_timeline(session: requests.Session, repos: list, state: dict):
         return
     completed = set(state.get("completed", []))
     for owner, repo in repos:
+        if time_up():
+            return
         full = f"{owner}/{repo}"
         if full in completed:
             continue
         repo_dir = RAW_DIR / owner / repo
         repo_dir.mkdir(parents=True, exist_ok=True)
 
-        pr_file = repo_dir / "pull_requests.jsonl"
         pr_numbers = []
-        if pr_file.exists():
-            with open(pr_file, "r", encoding="utf-8") as f:
+        for pf in sorted(repo_dir.glob("pull_requests*.jsonl")):
+            with open(pf, "r", encoding="utf-8") as f:
                 for line in f:
                     pr = json.loads(line)
                     pr_numbers.append(pr.get("number"))
