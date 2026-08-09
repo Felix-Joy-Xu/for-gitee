@@ -7,10 +7,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
     steps:
       - name: Probe Gitee API with token
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           python3 - <<'EOF'
 import json, os, time, urllib.request
