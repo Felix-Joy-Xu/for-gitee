@@ -234,6 +234,8 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
     empty_count = 0
 
     while True:
+        if time_up():
+            return all_items
         p["page"] = page
         if since and since_key:
             p[since_key] = since
