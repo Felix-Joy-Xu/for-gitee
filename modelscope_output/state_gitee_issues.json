@@ -1,5 +1,7 @@
 {
-  "completed": [],
+  "completed": [
+    "mindspore/mindspore"
+  ],
   "fixed_ghost_completed": [
     "Baidu/uid-generator",
     "InternLM/InternLM",
@@ -30,5 +32,8 @@
     "opengoofy/hippo4j",
     "pingcap/tidb",
     "sofastack/sofa-boot"
+  ],
+  "restored_completed": [
+    "mindspore/mindspore"
   ]
 }
