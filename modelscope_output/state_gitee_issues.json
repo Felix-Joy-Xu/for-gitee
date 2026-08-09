@@ -1,17 +1,31 @@
 {
   "completed": [
+    "Baidu/uid-generator",
+    "InternLM/InternLM",
+    "InternLM/MindSearch",
+    "InternLM/lmdeploy",
+    "InternLM/opencompass",
+    "InternLM/xtuner",
+    "Jittor/Jittor",
     "Tencent/APIJSON",
     "Tencent/vConsole",
+    "Tencent/wepy",
     "Tencent/weui",
+    "alibaba/arthas",
     "alibaba/canal",
+    "alibaba/easyexcel",
+    "apache/rocketmq",
     "apolloconfig/apollo",
     "baomidou/mybatis-plus",
     "elunez/eladmin",
+    "labuladong/fucking-algorithm",
     "lenve/vhr",
     "macrozheng/mall",
     "mindspore/mindspore",
     "mindspore/mindspore-lite",
+    "modelscope/FunASR",
     "newbee-ltd/newbee-mall",
+    "opengauss/openGauss-AI",
     "opengoofy/hippo4j",
     "pingcap/tidb",
     "sofastack/sofa-boot"
@@ -62,5 +76,7 @@
     "opengoofy/hippo4j",
     "pingcap/tidb",
     "sofastack/sofa-boot"
-  ]
+  ],
+  "failed": [],
+  "progress": {}
 }

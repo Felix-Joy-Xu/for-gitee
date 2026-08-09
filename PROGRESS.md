@@ -1,6 +1,6 @@
 # Gitee 爬取进度
 
-最后更新: 2026-08-09 15:50:47 UTC
+最后更新: 2026-08-09 21:51:29 UTC
 
 | 仓库 | repos | issues | issue_comments | pull_requests | pr_comments | pr_reviews | pr_timeline |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -34,6 +34,10 @@
 - pr_timeline: 0 行
 
 ## 断点状态
-- state_gitee_issue_comments.json: 完成 29 个仓库
+- state_gitee_issue_comments.json: 完成 28 个仓库
 - state_gitee_issues.json: 完成 29 个仓库
+- state_gitee_pr_comments.json: 完成 29 个仓库
+- state_gitee_pr_reviews.json: 整表跳过（Gitee API 无 /pulls/{n}/reviews 端点（404））
+- state_gitee_pr_timeline.json: 整表跳过（Gitee API 无 /pulls/{n}/events 端点（404））
+- state_gitee_pull_requests.json: 完成 28 个仓库
 - state_gitee_repos.json: 完成 29 个仓库
