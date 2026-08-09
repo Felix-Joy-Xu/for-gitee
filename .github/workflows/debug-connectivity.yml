@@ -1,0 +1,21 @@
+name: Debug Connectivity
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe Gitee API
+        run: |
+          for i in 1 2 3; do
+            echo "=== attempt $i ==="
+            curl -sS -o /dev/null -w "repos: HTTP %{http_code} total %{time_total}s\n" \
+              "https://gitee.com/api/v5/repos/mindspore/mindspore" -m 30 || echo "repos: FAILED"
+            curl -sS -o /dev/null -w "issues: HTTP %{http_code} total %{time_total}s\n" \
+              "https://gitee.com/api/v5/repos/mindspore/mindspore/issues?per_page=2" -m 30 || echo "issues: FAILED"
+          done
+          echo "=== DNS ==="
+          getent hosts gitee.com || nslookup gitee.com | head -5
