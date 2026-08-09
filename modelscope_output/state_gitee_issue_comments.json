@@ -1,0 +1,18 @@
+{
+  "completed": [
+    "InternLM/InternLM",
+    "InternLM/MindSearch",
+    "InternLM/lmdeploy",
+    "InternLM/opencompass",
+    "InternLM/xtuner",
+    "Jittor/Jittor",
+    "elunez/eladmin",
+    "labuladong/fucking-algorithm",
+    "lenve/vhr",
+    "macrozheng/mall",
+    "mindspore/mindspore",
+    "mindspore/mindspore-lite",
+    "modelscope/FunASR",
+    "opengauss/openGauss-AI"
+  ]
+}
