@@ -1,5 +1,6 @@
 {
-  "completed": [
+  "completed": [],
+  "fixed_ghost_completed": [
     "Baidu/uid-generator",
     "InternLM/InternLM",
     "InternLM/MindSearch",
