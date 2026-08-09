@@ -1,0 +1,29 @@
+name: Debug2 Token Probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe Gitee API with token
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+import json, os, time, urllib.request
+token = os.environ["GITEE_TOKEN"]
+for page in (1, 2, 5):
+    t0 = time.time()
+    url = (f"https://gitee.com/api/v5/repos/mindspore/mindspore/issues"
+           f"?access_token={token}&state=all&since=2020-01-01&per_page=100&page={page}")
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            data = json.load(r)
+            h = {k: r.headers.get(k) for k in ("X-RateLimit-Remaining", "X-RateLimit-Limit", "X-RateLimit-Reset")}
+            print(f"page {page}: HTTP {r.status} items={len(data)} in {time.time()-t0:.1f}s headers={h}", flush=True)
+    except Exception as e:
+        print(f"page {page}: ERROR {e} in {time.time()-t0:.1f}s", flush=True)
+EOF
