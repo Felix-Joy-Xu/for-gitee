@@ -143,7 +143,9 @@ def gitee_get(session: requests.Session, path: str, params: dict = None) -> tupl
     for attempt in range(10):
         token = TOKEN_ROTATOR.current()
         if not token:
-            return None, 401
+            # 全部 token 冷却中：等待恢复后重试，避免把半途数据标记为完成
+            time.sleep(30)
+            continue
         p["access_token"] = token
 
         try:
