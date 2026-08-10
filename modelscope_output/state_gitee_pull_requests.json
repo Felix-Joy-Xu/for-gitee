@@ -21,6 +21,7 @@
     "labuladong/fucking-algorithm",
     "lenve/vhr",
     "macrozheng/mall",
+    "mindspore/mindspore",
     "mindspore/mindspore-lite",
     "modelscope/FunASR",
     "newbee-ltd/newbee-mall",
@@ -29,10 +30,6 @@
     "pingcap/tidb",
     "sofastack/sofa-boot"
   ],
-  "failed": [
-    "mindspore/mindspore"
-  ],
-  "progress": {
-    "mindspore/mindspore": 760
-  }
+  "failed": {},
+  "progress": {}
 }
