@@ -246,10 +246,11 @@ def fetch_paginated(session: requests.Session, path: str, params: dict = None,
             print(f"  [paginate] {path} HTTP {status}, stop at page {page}")
             break
 
-        ok = True
         if not isinstance(data, list):
             print(f"  [paginate] {path} returned non-list, stop")
             break
+
+        ok = True
 
         if not data:
             empty_count += 1
@@ -299,7 +300,8 @@ def crawl_repos(session: requests.Session, repos: list, state: dict):
 def crawl_issues(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
-    failed = list(state.get("failed", []))
+    failed = dict(state.get("failed", {}))
+    skipped_repos = dict(state.get("skipped_repos", {}))
     for owner, repo in repos:
         if time_up():
             return
@@ -330,16 +332,20 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
                                     start_page=start, on_page=on_page)
 
         if not ok and not items:
-            # 请求全部失败：不得标记完成，记录失败供下轮重试
-            if full not in failed:
-                failed.append(full)
-            state["failed"] = failed
+            failed[full] = failed.get(full, 0) + 1
+            if failed[full] >= 3:
+                skipped_repos[full] = "连续 %d 轮请求失败（端点可能不可用）" % failed[full]
+                failed.pop(full, None)
+                state["failed"] = failed
+                state["skipped_repos"] = skipped_repos
+            else:
+                state["failed"] = failed
             save_state("issues", state)
-            print(f"  [issues] {full}: 请求失败，跳过本轮（下轮重试）")
+            print("  [issues] %s: 请求失败（第 %d 轮），跳过本轮" % (full, failed.get(full, 0)))
             continue
 
         completed.add(full)
-        failed = [f for f in failed if f != full]
+        failed.pop(full, None)
         progress.pop(full, None)
         state["failed"] = failed
         state["progress"] = progress
@@ -351,7 +357,8 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
 def crawl_issue_comments(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
-    failed = list(state.get("failed", []))
+    failed = dict(state.get("failed", {}))
+    skipped_repos = dict(state.get("skipped_repos", {}))
     for owner, repo in repos:
         if time_up():
             return
@@ -385,15 +392,20 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
                                     start_page=start, on_page=on_page)
 
         if not ok and not items:
-            if full not in failed:
-                failed.append(full)
-            state["failed"] = failed
+            failed[full] = failed.get(full, 0) + 1
+            if failed[full] >= 3:
+                skipped_repos[full] = "连续 %d 轮请求失败（端点可能不可用）" % failed[full]
+                failed.pop(full, None)
+                state["failed"] = failed
+                state["skipped_repos"] = skipped_repos
+            else:
+                state["failed"] = failed
             save_state("issue_comments", state)
-            print(f"  [issue_comments] {full}: 请求失败，跳过本轮（下轮重试）")
+            print("  [issue_comments] %s: 请求失败（第 %d 轮），跳过本轮" % (full, failed.get(full, 0)))
             continue
 
         completed.add(full)
-        failed = [f for f in failed if f != full]
+        failed.pop(full, None)
         progress.pop(full, None)
         state["failed"] = failed
         state["progress"] = progress
@@ -405,7 +417,8 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
 def crawl_pull_requests(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
-    failed = list(state.get("failed", []))
+    failed = dict(state.get("failed", {}))
+    skipped_repos = dict(state.get("skipped_repos", {}))
     for owner, repo in repos:
         if time_up():
             return
@@ -434,15 +447,20 @@ def crawl_pull_requests(session: requests.Session, repos: list, state: dict, sin
                                     start_page=start, on_page=on_page)
 
         if not ok and not items:
-            if full not in failed:
-                failed.append(full)
-            state["failed"] = failed
+            failed[full] = failed.get(full, 0) + 1
+            if failed[full] >= 3:
+                skipped_repos[full] = "连续 %d 轮请求失败（端点可能不可用）" % failed[full]
+                failed.pop(full, None)
+                state["failed"] = failed
+                state["skipped_repos"] = skipped_repos
+            else:
+                state["failed"] = failed
             save_state("pull_requests", state)
-            print(f"  [pull_requests] {full}: 请求失败，跳过本轮（下轮重试）")
+            print("  [pull_requests] %s: 请求失败（第 %d 轮），跳过本轮" % (full, failed.get(full, 0)))
             continue
 
         completed.add(full)
-        failed = [f for f in failed if f != full]
+        failed.pop(full, None)
         progress.pop(full, None)
         state["failed"] = failed
         state["progress"] = progress
