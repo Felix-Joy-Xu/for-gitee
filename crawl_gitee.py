@@ -297,10 +297,20 @@ def crawl_repos(session: requests.Session, repos: list, state: dict):
         time.sleep(REQUEST_DELAY)
 
 
+def load_failed(state: dict) -> dict:
+    """兼容旧版 list 格式与新版 dict 格式的 failed 字段。"""
+    raw = state.get("failed", {})
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, list):
+        return {r: 1 for r in raw}
+    return {}
+
+
 def crawl_issues(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
-    failed = dict(state.get("failed", {}))
+    failed = load_failed(state)
     skipped_repos = dict(state.get("skipped_repos", {}))
     for owner, repo in repos:
         if time_up():
@@ -357,7 +367,7 @@ def crawl_issues(session: requests.Session, repos: list, state: dict, since: str
 def crawl_issue_comments(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
-    failed = dict(state.get("failed", {}))
+    failed = load_failed(state)
     skipped_repos = dict(state.get("skipped_repos", {}))
     for owner, repo in repos:
         if time_up():
@@ -417,7 +427,7 @@ def crawl_issue_comments(session: requests.Session, repos: list, state: dict, si
 def crawl_pull_requests(session: requests.Session, repos: list, state: dict, since: str):
     completed = set(state.get("completed", []))
     progress = dict(state.get("progress", {}))
-    failed = dict(state.get("failed", {}))
+    failed = load_failed(state)
     skipped_repos = dict(state.get("skipped_repos", {}))
     for owner, repo in repos:
         if time_up():
