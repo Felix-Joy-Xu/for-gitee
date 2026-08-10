@@ -32,5 +32,7 @@
   "failed": [
     "mindspore/mindspore"
   ],
-  "progress": {}
+  "progress": {
+    "mindspore/mindspore": 70
+  }
 }

@@ -72,8 +72,8 @@
     "newbee-ltd/newbee-mall",
     "opengoofy/hippo4j"
   ],
-  "failed": [
-    "mindspore/mindspore"
-  ],
+  "failed": {
+    "mindspore/mindspore": 2
+  },
   "progress": {}
 }
