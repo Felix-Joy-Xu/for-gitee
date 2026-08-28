@@ -73,7 +73,7 @@
     "opengoofy/hippo4j"
   ],
   "failed": {
-    "mindspore/mindspore": 1
+    "mindspore/mindspore": 2
   },
   "progress": {},
   "skipped_repos": {
