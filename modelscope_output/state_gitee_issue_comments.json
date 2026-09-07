@@ -72,7 +72,9 @@
     "newbee-ltd/newbee-mall",
     "opengoofy/hippo4j"
   ],
-  "failed": {},
+  "failed": {
+    "mindspore/mindspore": 1
+  },
   "progress": {},
   "skipped_repos": {
     "mindspore/mindspore": "连续 3 轮请求失败（端点可能不可用）"
