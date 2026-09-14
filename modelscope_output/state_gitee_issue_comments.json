@@ -21,6 +21,7 @@
     "labuladong/fucking-algorithm",
     "lenve/vhr",
     "macrozheng/mall",
+    "mindspore/mindspore",
     "mindspore/mindspore-lite",
     "modelscope/FunASR",
     "newbee-ltd/newbee-mall",
@@ -72,9 +73,7 @@
     "newbee-ltd/newbee-mall",
     "opengoofy/hippo4j"
   ],
-  "failed": {
-    "mindspore/mindspore": 1
-  },
+  "failed": {},
   "progress": {},
   "skipped_repos": {
     "mindspore/mindspore": "连续 3 轮请求失败（端点可能不可用）"
